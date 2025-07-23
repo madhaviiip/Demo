@@ -8,16 +8,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
 import { Truck, UserCheck, Shield } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 export default function Auth() {
   const { user, profile, signUp, signIn } = useAuth();
-  const [email, setEmail] = useState('');
+  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<'customer' | 'driver' | 'admin'>('customer');
   const [loading, setLoading] = useState(false);
 
-  // Redirect if already authenticated
   if (user && profile) {
     switch (profile.role) {
       case 'customer':
@@ -34,16 +35,14 @@ export default function Auth() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
-    await signUp(email, password, fullName, role);
+    await signUp(identifier, password, fullName, role, authMethod); // custom hook should support this
     setLoading(false);
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
-    await signIn(email, password);
+    await signIn(identifier, password, authMethod); // custom hook should support this
     setLoading(false);
   };
 
@@ -68,21 +67,28 @@ export default function Auth() {
           <CardDescription>20-minute laundry pickup & delivery</CardDescription>
         </CardHeader>
         <CardContent>
+          <ToggleGroup type="single" value={authMethod} onValueChange={(val) => setAuthMethod(val as 'email' | 'phone')} className="w-full justify-center mb-4">
+            <ToggleGroupItem value="email" className="px-4 py-1">Email</ToggleGroupItem>
+            <ToggleGroupItem value="phone" className="px-4 py-1">Phone</ToggleGroupItem>
+          </ToggleGroup>
+
           <Tabs defaultValue="signin" className="space-y-4">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
-            
+
+            {/* Sign In */}
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signin-email">Email</Label>
+                  <Label htmlFor="signin-id">{authMethod === 'email' ? 'Email' : 'Phone'}</Label>
                   <Input
-                    id="signin-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="signin-id"
+                    type={authMethod === 'email' ? 'email' : 'tel'}
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    placeholder={authMethod === 'email' ? 'you@example.com' : '+91XXXXXXXXXX'}
                     required
                   />
                 </div>
@@ -101,7 +107,8 @@ export default function Auth() {
                 </Button>
               </form>
             </TabsContent>
-            
+
+            {/* Sign Up */}
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
@@ -115,12 +122,13 @@ export default function Auth() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
+                  <Label htmlFor="signup-id">{authMethod === 'email' ? 'Email' : 'Phone'}</Label>
                   <Input
-                    id="signup-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="signup-id"
+                    type={authMethod === 'email' ? 'email' : 'tel'}
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    placeholder={authMethod === 'email' ? 'you@example.com' : '+91XXXXXXXXXX'}
                     required
                   />
                 </div>
@@ -138,7 +146,7 @@ export default function Auth() {
                   <Label htmlFor="role">I want to join as a:</Label>
                   <Select value={role} onValueChange={(value: 'customer' | 'driver' | 'admin') => setRole(value)}>
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Select role" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="customer">
@@ -173,3 +181,4 @@ export default function Auth() {
     </div>
   );
 }
+
