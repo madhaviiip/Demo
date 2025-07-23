@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 
 interface Profile {
   id: string;
-  email: string;
+  email: string | null;
   full_name: string | null;
   role: 'customer' | 'driver' | 'admin';
   phone: string | null;
@@ -14,6 +14,8 @@ interface Profile {
   updated_at: string;
 }
 
+type AuthMethod = 'email' | 'phone';
+
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -21,87 +23,127 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        
+
         if (session?.user) {
-          // Fetch user profile
-          setTimeout(async () => {
-            try {
-              const { data: profileData, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', session.user.id)
-                .single();
-              
-              if (error) {
-                console.error('Error fetching profile:', error);
-                return;
-              }
-              
-              setProfile(profileData as Profile);
-            } catch (error) {
-              console.error('Profile fetch error:', error);
-            }
-          }, 0);
+          fetchProfile(session.user.id);
         } else {
           setProfile(null);
         }
-        
+
         setLoading(false);
       }
     );
 
-    // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (!session) {
         setLoading(false);
+      } else {
+        fetchProfile(session.user.id);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string, role: 'customer' | 'driver' | 'admin') => {
+  const fetchProfile = async (userId: string) => {
+    const { data: profileData, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching profile:', error);
+      return;
+    }
+
+    setProfile(profileData as Profile);
+  };
+
+  const signUp = async (
+    value: string,
+    password: string,
+    fullName: string,
+    role: 'customer' | 'driver' | 'admin',
+    method: AuthMethod
+  ) => {
     const redirectUrl = `${window.location.origin}/`;
-    
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          full_name: fullName,
-          role: role
-        }
-      }
-    });
-    
+
+    const payload =
+      method === 'email'
+        ? {
+            email: value,
+            password,
+            options: {
+              emailRedirectTo: redirectUrl,
+              data: { full_name: fullName, role }
+            }
+          }
+        : {
+            phone: value,
+            password,
+            options: {
+              data: { full_name: fullName, role }
+            }
+          };
+
+    const { data, error } = await supabase.auth.signUp(payload as any);
+
     if (error) {
       toast.error(error.message);
       return { error };
     }
-    
-    toast.success('Check your email to verify your account!');
+
+    const userId = data.user?.id;
+
+    if (userId) {
+      await supabase.from('profiles').insert([
+        {
+          id: userId,
+          full_name: fullName,
+          email: method === 'email' ? value : null,
+          phone: method === 'phone' ? value : null,
+          role,
+        }
+      ]);
+      fetchProfile(userId);
+    }
+
+    toast.success(
+      method === 'email'
+        ? 'Check your email to verify your account!'
+        : 'Sign-up successful!'
+    );
+
     return { error: null };
   };
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-    
+  const signIn = async (
+    value: string,
+    password: string,
+    method: AuthMethod
+  ) => {
+    const payload =
+      method === 'email'
+        ? { email: value, password }
+        : { phone: value, password };
+
+    const { data, error } = await supabase.auth.signInWithPassword(payload as any);
+
     if (error) {
       toast.error(error.message);
       return { error };
     }
-    
+
+    const userId = data.user?.id;
+    if (userId) fetchProfile(userId);
+
     return { error: null };
   };
 
@@ -111,6 +153,8 @@ export const useAuth = () => {
       toast.error(error.message);
     } else {
       toast.success('Signed out successfully');
+      setUser(null);
+      setProfile(null);
     }
   };
 
@@ -121,6 +165,6 @@ export const useAuth = () => {
     loading,
     signUp,
     signIn,
-    signOut
+    signOut,
   };
 };
