@@ -3,21 +3,24 @@ import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
 import { Truck, UserCheck, Shield } from 'lucide-react';
 
 export default function Auth() {
-  const { user, profile, signUp, signIn } = useAuth();
+  const { user, profile, signUp, signIn, signInWithPhone, signUpWithPhone, confirmOTP } = useAuth();
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<'customer' | 'driver' | 'admin'>('customer');
+  const [role, setRole] = useState<'customer' | 'driver'>('customer');
   const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<'email' | 'phone'>('email');
+  const [otpSent, setOtpSent] = useState(false);
 
-  // Redirect if already authenticated
   if (user && profile) {
     switch (profile.role) {
       case 'customer':
@@ -26,146 +29,113 @@ export default function Auth() {
         return <Navigate to="/driver" replace />;
       case 'admin':
         return <Navigate to="/admin" replace />;
-      default:
-        return <Navigate to="/" replace />;
     }
   }
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleEmailAuth = async (mode: 'signin' | 'signup') => {
     setLoading(true);
-    
-    await signUp(email, password, fullName, role);
-    setLoading(false);
-  };
-
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    await signIn(email, password);
-    setLoading(false);
-  };
-
-  const getRoleIcon = (roleName: string) => {
-    switch (roleName) {
-      case 'customer':
-        return <UserCheck className="w-5 h-5" />;
-      case 'driver':
-        return <Truck className="w-5 h-5" />;
-      case 'admin':
-        return <Shield className="w-5 h-5" />;
-      default:
-        return null;
+    if (mode === 'signup') {
+      await signUp({ email, password, fullName, role });
+    } else {
+      await signIn({ email, password });
     }
+    setLoading(false);
+  };
+
+  const handlePhoneAuth = async (mode: 'signin' | 'signup') => {
+    setLoading(true);
+    try {
+      if (mode === 'signup') {
+        await signUpWithPhone({ phone, fullName, role });
+        setOtpSent(true);
+      } else {
+        await signInWithPhone(phone);
+        setOtpSent(true);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+    setLoading(false);
+  };
+
+  const handleOtpVerify = async () => {
+    setLoading(true);
+    try {
+      await confirmOTP(phone, otp);
+    } catch (error) {
+      console.error(error);
+    }
+    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-clean flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-primary">Dhobi Dash</CardTitle>
-          <CardDescription>20-minute laundry pickup & delivery</CardDescription>
+        <CardHeader>
+          <CardTitle className="text-center text-xl font-bold">Login / Signup</CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+          <Tabs defaultValue="email" className="w-full" onValueChange={(value) => setTab(value as 'email' | 'phone')}>
+            <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsTrigger value="email">Email</TabsTrigger>
+              <TabsTrigger value="phone">Phone</TabsTrigger>
             </TabsList>
-            
-            <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signin-email">Email</Label>
-                  <Input
-                    id="signin-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signin-password">Password</Label>
-                  <Input
-                    id="signin-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Signing In...' : 'Sign In'}
-                </Button>
-              </form>
+
+            <TabsContent value="email">
+              <Label>Full Name</Label>
+              <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="John Doe" />
+
+              <Label className="mt-2">Email</Label>
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+
+              <Label className="mt-2">Password</Label>
+              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+
+              <Label className="mt-2">Role</Label>
+              <Select value={role} onValueChange={(val) => setRole(val as 'customer' | 'driver')}>
+                <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="customer">Customer</SelectItem>
+                  <SelectItem value="driver">Driver</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div className="flex justify-between mt-4">
+                <Button onClick={() => handleEmailAuth('signin')} disabled={loading}>Sign In</Button>
+                <Button onClick={() => handleEmailAuth('signup')} variant="outline" disabled={loading}>Sign Up</Button>
+              </div>
             </TabsContent>
-            
-            <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-name">Full Name</Label>
-                  <Input
-                    id="signup-name"
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="role">I want to join as a:</Label>
-                  <Select value={role} onValueChange={(value: 'customer' | 'driver' | 'admin') => setRole(value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+
+            <TabsContent value="phone">
+              {!otpSent ? (
+                <>
+                  <Label>Full Name</Label>
+                  <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="John Doe" />
+
+                  <Label className="mt-2">Phone</Label>
+                  <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 9876543210" />
+
+                  <Label className="mt-2">Role</Label>
+                  <Select value={role} onValueChange={(val) => setRole(val as 'customer' | 'driver')}>
+                    <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="customer">
-                        <div className="flex items-center space-x-2">
-                          {getRoleIcon('customer')}
-                          <span>Customer</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="driver">
-                        <div className="flex items-center space-x-2">
-                          {getRoleIcon('driver')}
-                          <span>Driver</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="admin">
-                        <div className="flex items-center space-x-2">
-                          {getRoleIcon('admin')}
-                          <span>Admin</span>
-                        </div>
-                      </SelectItem>
+                      <SelectItem value="customer">Customer</SelectItem>
+                      <SelectItem value="driver">Driver</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Creating Account...' : 'Create Account'}
-                </Button>
-              </form>
+
+                  <div className="flex justify-between mt-4">
+                    <Button onClick={() => handlePhoneAuth('signin')} disabled={loading}>Send OTP (Login)</Button>
+                    <Button onClick={() => handlePhoneAuth('signup')} variant="outline" disabled={loading}>Send OTP (Signup)</Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Label>Enter OTP</Label>
+                  <Input value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="123456" />
+                  <Button onClick={handleOtpVerify} className="mt-4 w-full" disabled={loading}>Verify OTP</Button>
+                </>
+              )}
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -173,3 +143,4 @@ export default function Auth() {
     </div>
   );
 }
+
